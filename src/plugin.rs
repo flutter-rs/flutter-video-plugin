@@ -1,5 +1,6 @@
 use crate::types::*;
 use async_std::task;
+use flutter_engine::texture_registry::{RgbaTexture, Texture};
 use flutter_plugins::prelude::*;
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -42,21 +43,27 @@ impl MethodCallHandler for Handler {
                 println!("{:?}", args);
 
                 // register texture
-                let raw = vec![200u8; 400];
-                let img = image::ImageBuffer::from_raw(10, 10, raw).unwrap();
-                let texture = engine.create_texture(img);
+                let raw = vec![0u8; 40000];
+                let img = image::ImageBuffer::from_raw(100, 100, raw).unwrap();
+                let gl_texture = RgbaTexture::new(img);
+                let texture = engine.create_texture(gl_texture.clone());
+                let texture_id = texture.id();
 
                 // register channel
-                let channel = format!("{}/videoEvents{}", CHANNEL_NAME, texture);
-                let handler = Arc::new(RwLock::new(StreamHandler::new(channel.clone(), texture)));
+                let channel = format!("{}/videoEvents{}", CHANNEL_NAME, texture_id);
+                let handler = Arc::new(RwLock::new(StreamHandler::new(
+                    channel.clone(),
+                    texture,
+                    gl_texture,
+                )));
                 let stream_handler = Arc::downgrade(&handler);
-                self.streams.insert(texture, handler);
+                self.streams.insert(texture_id, handler);
                 engine.with_channel_registrar(PLUGIN_NAME, |registrar| {
                     registrar.register_channel(EventChannel::new(channel, stream_handler));
                 });
 
                 Ok(json_value!({
-                    "textureId": texture,
+                    "textureId": texture_id,
                 }))
             }
             "init" => Ok(Value::Null),
@@ -97,28 +104,34 @@ impl MethodCallHandler for Handler {
 
 struct StreamHandler {
     channel: String,
-    texture_id: i64,
+    texture: Texture,
+    gl_texture: RgbaTexture,
     stop_trigger: Arc<AtomicBool>,
 }
 
 impl StreamHandler {
-    fn new(channel: String, texture_id: i64) -> Self {
+    fn new(channel: String, texture: Texture, gl_texture: RgbaTexture) -> Self {
         Self {
             channel,
-            texture_id,
+            texture,
+            gl_texture,
             stop_trigger: Default::default(),
         }
     }
 }
 
 impl EventHandler for StreamHandler {
-    fn on_listen(&mut self, _value: Value, engine: FlutterEngine) -> Result<Value, MethodCallError> {
+    fn on_listen(
+        &mut self,
+        _value: Value,
+        engine: FlutterEngine,
+    ) -> Result<Value, MethodCallError> {
         let stop_trigger = Arc::new(AtomicBool::new(false));
         self.stop_trigger = stop_trigger.clone();
         let channel_name = self.channel.clone();
 
         engine.run_on_platform_thread(move |engine| {
-            rt.with_channel(&channel_name, move |channel| {
+            engine.with_channel(&channel_name, move |channel| {
                 if let Some(channel) = channel.try_as_method_channel() {
                     let value = to_value(VideoEvent::initialized(100, 100, 5000)).unwrap();
                     println!("{:?}", value);

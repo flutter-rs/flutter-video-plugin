@@ -1,4 +1,4 @@
+mod plugin;
 mod types;
-mod video_player;
 
-pub use video_player::VideoPlugin;
+pub use plugin::VideoPlugin;
