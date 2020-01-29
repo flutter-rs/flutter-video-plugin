@@ -1,31 +1,6 @@
-# flutter-app-template
+# flutter-video-plugin
 
 [![Join Gitter Chat Channel][gitter-badge]][gitter-url]
-
-Example app built using flutter-rs.
-
-![flutter-app-template][flutter-app-template]
-
-# Get Started
-
-## Install requirements
-
-- [Rust](https://www.rust-lang.org/tools/install)
-
-- [flutter sdk](https://flutter.io)
-
-## Develop
-- To create a new project
-
-    `git clone https://github.com/flutter-rs/flutter-app-template`
-
-- To develop with cli hot-reloading:
-
-    `cargo flutter run`
-
-## Distribute
-- To build distribution, use:
-    `cargo flutter --format appimage build --release`
 
 # License
 Copyright 2020 flutter-rs
@@ -50,4 +25,3 @@ SOFTWARE.
 
 [gitter-badge]: https://badges.gitter.im/flutter-rs/community.svg
 [gitter-url]: https://gitter.im/flutter-rs/community
-[flutter-app-template]: https://user-images.githubusercontent.com/741807/72478608-a8b0e500-37f2-11ea-84ee-d7bd38a6370e.png
