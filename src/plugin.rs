@@ -1,14 +1,29 @@
+use crate::player::Player;
 use crate::types::*;
-use async_std::task;
-use flutter_engine::texture_registry::{RgbaTexture, Texture};
 use flutter_plugins::prelude::*;
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
-use std::time::Duration;
 
 const PLUGIN_NAME: &str = module_path!();
 const CHANNEL_NAME: &str = "flutter.io/videoPlayer";
+
+#[derive(Debug)]
+struct InvalidTextureId;
+
+impl std::fmt::Display for InvalidTextureId {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "invalid texture id")
+    }
+}
+
+impl std::error::Error for InvalidTextureId {}
+
+impl From<InvalidTextureId> for MethodCallError {
+    fn from(error: InvalidTextureId) -> Self {
+        MethodCallError::from_error(error)
+    }
+}
 
 #[derive(Default)]
 pub struct VideoPlugin {
@@ -40,22 +55,22 @@ impl MethodCallHandler for Handler {
         match call.method.as_str() {
             "create" => {
                 let args: CreateArgs = from_value(&call.args)?;
-                println!("{:?}", args);
 
-                // register texture
-                let raw = vec![0u8; 40000];
-                let img = image::ImageBuffer::from_raw(100, 100, raw).unwrap();
-                let gl_texture = RgbaTexture::new(img);
-                let texture = engine.create_texture(gl_texture.clone());
+                // create texture
+                let texture = engine.create_texture();
                 let texture_id = texture.id();
+
+                // create player
+                let player = if let Some(asset) = args.asset.as_ref() {
+                    let path = engine.assets().join(asset);
+                    Player::from_path(&path, texture)?
+                } else {
+                    unimplemented!();
+                };
 
                 // register channel
                 let channel = format!("{}/videoEvents{}", CHANNEL_NAME, texture_id);
-                let handler = Arc::new(RwLock::new(StreamHandler::new(
-                    channel.clone(),
-                    texture,
-                    gl_texture,
-                )));
+                let handler = Arc::new(RwLock::new(StreamHandler::new(channel.clone(), player)));
                 let stream_handler = Arc::downgrade(&handler);
                 self.streams.insert(texture_id, handler);
                 engine.with_channel_registrar(PLUGIN_NAME, |registrar| {
@@ -69,32 +84,38 @@ impl MethodCallHandler for Handler {
             "init" => Ok(Value::Null),
             "setLooping" => {
                 let args: SetLoopingArgs = from_value(&call.args)?;
-                println!("{:?}", args);
+                let stream = self.streams.get(&args.texture_id).ok_or(InvalidTextureId)?;
+                stream.read().unwrap().player.set_looping(args.looping);
                 Ok(Value::Null)
             }
             "setVolume" => {
                 let args: SetVolumeArgs = from_value(&call.args)?;
-                println!("{:?}", args);
+                let stream = self.streams.get(&args.texture_id).ok_or(InvalidTextureId)?;
+                stream.read().unwrap().player.set_volume(args.volume);
                 Ok(Value::Null)
             }
             "pause" => {
                 let args: TextureIdArgs = from_value(&call.args)?;
-                println!("{:?}", args);
+                let stream = self.streams.get(&args.texture_id).ok_or(InvalidTextureId)?;
+                stream.read().unwrap().player.pause()?;
                 Ok(Value::Null)
             }
             "play" => {
                 let args: TextureIdArgs = from_value(&call.args)?;
-                println!("{:?}", args);
+                let stream = self.streams.get(&args.texture_id).ok_or(InvalidTextureId)?;
+                stream.read().unwrap().player.play()?;
                 Ok(Value::Null)
             }
             "position" => {
                 let args: TextureIdArgs = from_value(&call.args)?;
-                println!("{:?}", args);
-                Ok(Value::I32(0))
+                let stream = self.streams.get(&args.texture_id).ok_or(InvalidTextureId)?;
+                let position = stream.read().unwrap().player.position();
+                Ok(Value::I64(position))
             }
             "seekTo" => {
                 let args: SeekToArgs = from_value(&call.args)?;
-                println!("{:?}", args);
+                let stream = self.streams.get(&args.texture_id).ok_or(InvalidTextureId)?;
+                stream.read().unwrap().player.seek_to(args.location);
                 Ok(Value::Null)
             }
             _ => Err(MethodCallError::NotImplemented),
@@ -104,17 +125,15 @@ impl MethodCallHandler for Handler {
 
 struct StreamHandler {
     channel: String,
-    texture: Texture,
-    gl_texture: RgbaTexture,
+    player: Player,
     stop_trigger: Arc<AtomicBool>,
 }
 
 impl StreamHandler {
-    fn new(channel: String, texture: Texture, gl_texture: RgbaTexture) -> Self {
+    fn new(channel: String, player: Player) -> Self {
         Self {
             channel,
-            texture,
-            gl_texture,
+            player,
             stop_trigger: Default::default(),
         }
     }

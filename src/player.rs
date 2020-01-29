@@ -1,0 +1,223 @@
+use crate::audio::{AudioPlayer, AudioStream};
+use crate::video::{VideoPlayer, VideoStream};
+use av_format::demuxer::*;
+use flutter_engine::texture_registry::Texture;
+use flutter_plugins::prelude::*;
+// use matroska::demuxer::MKV_DESC;
+use av_codec::common::CodecList;
+use av_codec::decoder::Codecs as DecCodecs;
+use av_codec::decoder::Context as DecContext;
+use av_data::frame::ArcFrame;
+pub use av_data::frame::MediaKind;
+use av_data::params;
+use av_format::buffer::AccReader;
+use av_vorbis::decoder::VORBIS_DESCR;
+use libopus::decoder::OPUS_DESCR;
+use libvpx::decoder::VP9_DESCR;
+use matroska::demuxer::MkvDemuxer;
+use std::collections::HashMap;
+use std::fs::File;
+use std::path::Path;
+use std::sync::mpsc;
+use std::thread;
+
+#[derive(Debug)]
+pub enum PlayerError {
+    Format(av_format::error::Error),
+    Codec(av_codec::error::Error),
+    Audio(crate::audio::AudioError),
+    Io(std::io::Error),
+}
+
+impl std::fmt::Display for PlayerError {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        match self {
+            Self::Format(err) => return err.fmt(f),
+            Self::Codec(err) => return err.fmt(f),
+            Self::Audio(err) => return err.fmt(f),
+            Self::Io(err) => return err.fmt(f),
+        }
+    }
+}
+
+impl std::error::Error for PlayerError {}
+
+impl From<av_format::error::Error> for PlayerError {
+    fn from(error: av_format::error::Error) -> Self {
+        Self::Format(error)
+    }
+}
+
+impl From<av_codec::error::Error> for PlayerError {
+    fn from(error: av_codec::error::Error) -> Self {
+        Self::Codec(error)
+    }
+}
+impl From<crate::audio::AudioError> for PlayerError {
+    fn from(error: crate::audio::AudioError) -> Self {
+        Self::Audio(error)
+    }
+}
+
+impl From<std::io::Error> for PlayerError {
+    fn from(error: std::io::Error) -> Self {
+        Self::Io(error)
+    }
+}
+
+impl From<PlayerError> for MethodCallError {
+    fn from(error: PlayerError) -> Self {
+        MethodCallError::from_error(error)
+    }
+}
+
+struct PlaybackContext {
+    decoders: HashMap<isize, DecContext>,
+    demuxer: Context,
+    pub video: Option<params::VideoInfo>,
+    pub audio: Option<params::AudioInfo>,
+}
+
+impl PlaybackContext {
+    pub fn from_path(path: &Path) -> Result<Self, PlayerError> {
+        let r = File::open(path)?;
+        // Context::from_read(demuxers, r).unwrap();
+        let ar = AccReader::with_capacity(4 * 1024, r);
+
+        let mut c = Context::new(Box::new(MkvDemuxer::new()), Box::new(ar));
+
+        c.read_headers()?;
+
+        let decoders = DecCodecs::from_list(&[VP9_DESCR, OPUS_DESCR, VORBIS_DESCR]);
+
+        let mut video_info = None;
+        let mut audio_info = None;
+        let mut decs: HashMap<isize, DecContext> = HashMap::with_capacity(2);
+        for st in &c.info.streams {
+            // TODO stream selection
+            if let Some(ref codec_id) = st.params.codec_id {
+                if let Some(mut ctx) = DecContext::by_name(&decoders, codec_id) {
+                    if let Some(ref extradata) = st.params.extradata {
+                        ctx.set_extradata(extradata);
+                    }
+                    ctx.configure()?;
+                    decs.insert(st.index as isize, ctx);
+                    match st.params.kind {
+                        Some(params::MediaKind::Video(ref info)) => {
+                            video_info = Some(info.clone());
+                        }
+                        Some(params::MediaKind::Audio(ref info)) => {
+                            audio_info = Some(info.clone());
+                        }
+                        _ => {}
+                    }
+                }
+            }
+        }
+
+        Ok(Self {
+            decoders: decs,
+            demuxer: c,
+            video: video_info,
+            audio: audio_info,
+        })
+    }
+
+    pub fn decode_one(&mut self) -> Result<Option<ArcFrame>, PlayerError> {
+        match self.demuxer.read_event()? {
+            Event::NewPacket(pkt) => {
+                if let Some(dec) = self.decoders.get_mut(&pkt.stream_index) {
+                    //println!("Decoding packet at index {}", pkt.stream_index);
+                    dec.send_packet(&pkt)?;
+                    Ok(dec.receive_frame().ok())
+                } else {
+                    println!("Skipping packet at index {}", pkt.stream_index);
+                    Ok(None)
+                }
+            }
+            Event::Eof => Ok(None),
+            event => {
+                println!("Unsupported event {:?}", event);
+                unimplemented!();
+            }
+        }
+    }
+}
+
+pub struct Player {
+    audio: Option<AudioStream>,
+    video: Option<VideoStream>,
+}
+
+impl Player {
+    pub fn from_path(path: &Path, texture: Texture) -> Result<Self, PlayerError> {
+        let mut context = PlaybackContext::from_path(path)?;
+        let (v_s, v_r) = mpsc::sync_channel(1000);
+        let (a_s, a_r) = mpsc::channel();
+
+        let audio_info = context.audio.take().expect("audio channel");
+        let audio = AudioPlayer::new(&audio_info)?;
+        let audio_stream = audio.create_stream(a_r)?;
+
+        let video_info = context.video.take().expect("video channel");
+        let video = VideoPlayer::new(&video_info, texture);
+        let video_stream = video.create_stream(v_r);
+
+        // decoder task
+        thread::spawn(move || loop {
+            if let Ok(Some(frame)) = context.decode_one() {
+                match frame.kind {
+                    MediaKind::Video(_) => {
+                        if let Err(err) = v_s.send(frame) {
+                            eprintln!("{}", err);
+                        }
+                    }
+                    MediaKind::Audio(_) => {
+                        if let Err(err) = a_s.send(frame) {
+                            eprintln!("{}", err);
+                        }
+                    }
+                }
+            }
+        });
+
+        Ok(Self {
+            audio: Some(audio_stream),
+            video: Some(video_stream),
+        })
+    }
+
+    pub fn play(&self) -> Result<(), PlayerError> {
+        if let Some(audio) = &self.audio {
+            audio.play()?;
+        }
+        if let Some(video) = &self.video {
+            video.play();
+        }
+        Ok(())
+    }
+
+    pub fn pause(&self) -> Result<(), PlayerError> {
+        if let Some(audio) = &self.audio {
+            audio.pause()?;
+        }
+        if let Some(video) = &self.video {
+            video.pause();
+        }
+        Ok(())
+    }
+
+    pub fn position(&self) -> i64 {
+        0
+    }
+
+    pub fn seek_to(&self, _location: i64) {}
+
+    pub fn set_volume(&self, volume: f64) {
+        if let Some(stream) = &self.audio {
+            stream.set_volume(volume);
+        }
+    }
+
+    pub fn set_looping(&self, _looping: bool) {}
+}

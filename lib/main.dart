@@ -20,8 +20,9 @@ class _VideoAppState extends State<VideoApp> {
   @override
   void initState() {
     super.initState();
-    _controller = VideoPlayerController.network(
-        'http://www.sample-videos.com/video123/mp4/720/big_buck_bunny_720p_20mb.mp4')
+    _controller = VideoPlayerController
+      //.asset("assets/vp8_vorbis.webm")
+      .asset("assets/vp9_opus.webm")
       ..initialize().then((_) {
         // Ensure the first frame is shown after the video is initialized, even before
         // the play button has been pressed.
@@ -45,6 +46,7 @@ class _VideoAppState extends State<VideoApp> {
         floatingActionButton: FloatingActionButton(
           onPressed: () {
             setState(() {
+              _controller.setVolume(0.5);
               _controller.value.isPlaying
                   ? _controller.pause()
                   : _controller.play();

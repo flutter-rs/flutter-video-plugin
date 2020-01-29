@@ -1,7 +1,7 @@
 use flutter_video_plugin::VideoPlugin;
 use flutter_winit::FlutterWindow;
 use glutin::window::WindowBuilder;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 fn main() {
     env_logger::init();
@@ -22,12 +22,12 @@ fn main() {
     }
 
     let window = WindowBuilder::new().with_title("Flutter App Demo");
-    let flutter = FlutterWindow::new(window).unwrap();
+    let flutter = FlutterWindow::new(window, PathBuf::from(assets_dir)).unwrap();
     let flutter = flutter.with_resource_context().unwrap();
 
     flutter.add_plugin(VideoPlugin::default());
 
-    flutter.start_engine(Path::new(&assets_dir), &args).unwrap();
+    flutter.start_engine(&args).unwrap();
 
     flutter.run();
 }

@@ -22,28 +22,28 @@ pub enum VideoFormat {
 #[derive(Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TextureIdArgs {
-    texture_id: i64,
+    pub texture_id: i64,
 }
 
 #[derive(Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SetLoopingArgs {
-    texture_id: i64,
-    looping: bool,
+    pub texture_id: i64,
+    pub looping: bool,
 }
 
 #[derive(Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SetVolumeArgs {
-    texture_id: i64,
-    volume: f64,
+    pub texture_id: i64,
+    pub volume: f64,
 }
 
 #[derive(Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SeekToArgs {
-    texture_id: i64,
-    location: i64,
+    pub texture_id: i64,
+    pub location: i64,
 }
 
 #[derive(Debug, Default, Deserialize, Serialize)]
