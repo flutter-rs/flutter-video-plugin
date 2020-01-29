@@ -132,6 +132,7 @@ impl AudioPlayer {
                 while out_len > 0 {
                     if frame.is_none() {
                         if let Ok(f) = rx.recv() {
+                            //println!("received audio frame");
                             frame = Some(f);
                             in_off = 0;
                         }

@@ -57,16 +57,17 @@ impl VideoPlayer {
                 }
 
                 if let Ok(frame) = rx.recv() {
+                    //println!("received video frame");
                     let pts = frame.t.pts.unwrap();
                     let timebase = frame.t.timebase.unwrap();
-                    println!("{} {}", pts, timebase);
-                    let pts = (Rational64::from_integer(pts * 10000000) * timebase).to_integer();
+                    //println!("{} {}", pts, timebase);
+                    let pts = (Rational64::from_integer(pts * 1000000000) * timebase).to_integer();
                     if let Some(prev) = prev_pts {
                         let elapsed = now.elapsed();
                         if pts > prev {
                             let sleep_time = Duration::new(0, (pts - prev) as u32);
                             if elapsed < sleep_time {
-                                println!("Sleep for {} - {:?}", pts - prev, sleep_time - elapsed);
+                                //println!("Sleep for {} - {:?}", pts - prev, sleep_time - elapsed);
                                 thread::sleep(sleep_time - elapsed);
                             }
                         }
@@ -89,12 +90,12 @@ impl VideoPlayer {
                         let img = RgbaImage::from_fn(width as u32, height as u32, |x, y| {
                             let (cx, cy) = (x as usize, y as usize);
                             let y = y_plane[cy * y_stride + cx] as f64;
-                            let u = u_plane[(cy * u_stride / 2 + cx) / 2] as f64;
-                            let v = v_plane[(cy * v_stride / 2 + cx) / 2] as f64;
-                            let r = y + 1.370705 * (v - 128.0);
-                            let g = y - 0.698001 * (v - 128.0) - 0.337633 * (u - 128.0);
-                            let b = y + 1.732446 * (u - 128.0);
-                            Rgba([r as u8, g as u8, b as u8, 255])
+                            let u = u_plane[cy / 2 * width / 2 + cx / 2] as f64;
+                            let v = v_plane[cy / 2 * width / 2 + cx / 2] as f64;
+                            let r = 1.164 * (y - 16.0) + 1.596* (v - 128.0);
+                            let g = 1.164 * (y - 16.0) - 0.391 * (u - 128.0) - 0.813 * (v - 128.0);
+                            let b = 1.164 * (y - 16.0) + 2.018 * (u - 128.0);
+                            Rgba([clamp(r), clamp(g), clamp(b), 255])
                         });
                         texture.post_frame_rgba(img);
                     }
@@ -103,4 +104,14 @@ impl VideoPlayer {
         });
         VideoStream { playing }
     }
+}
+
+fn clamp(value: f64) -> u8 {
+    if value <= 0.0 {
+        return 0;
+    }
+    if value >= 255.0 {
+        return 255;
+    }
+    value as u8
 }

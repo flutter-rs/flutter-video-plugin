@@ -147,12 +147,14 @@ impl PlaybackContext {
 pub struct Player {
     audio: Option<AudioStream>,
     video: Option<VideoStream>,
+    width: i64,
+    height: i64,
 }
 
 impl Player {
     pub fn from_path(path: &Path, texture: Texture) -> Result<Self, PlayerError> {
         let mut context = PlaybackContext::from_path(path)?;
-        let (v_s, v_r) = mpsc::sync_channel(1000);
+        let (v_s, v_r) = mpsc::sync_channel(24);
         let (a_s, a_r) = mpsc::channel();
 
         let audio_info = context.audio.take().expect("audio channel");
@@ -166,6 +168,7 @@ impl Player {
         // decoder task
         thread::spawn(move || loop {
             if let Ok(Some(frame)) = context.decode_one() {
+                //println!("decoded frame");
                 match frame.kind {
                     MediaKind::Video(_) => {
                         if let Err(err) = v_s.send(frame) {
@@ -184,7 +187,17 @@ impl Player {
         Ok(Self {
             audio: Some(audio_stream),
             video: Some(video_stream),
+            width: video_info.width as _,
+            height: video_info.height as _,
         })
+    }
+
+    pub fn width(&self) -> i64 {
+        self.width
+    }
+
+    pub fn height(&self) -> i64 {
+        self.height
     }
 
     pub fn play(&self) -> Result<(), PlayerError> {

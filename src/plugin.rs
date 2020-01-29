@@ -2,7 +2,6 @@ use crate::player::Player;
 use crate::types::*;
 use flutter_plugins::prelude::*;
 use std::collections::HashMap;
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
 const PLUGIN_NAME: &str = module_path!();
@@ -126,7 +125,6 @@ impl MethodCallHandler for Handler {
 struct StreamHandler {
     channel: String,
     player: Player,
-    stop_trigger: Arc<AtomicBool>,
 }
 
 impl StreamHandler {
@@ -134,7 +132,6 @@ impl StreamHandler {
         Self {
             channel,
             player,
-            stop_trigger: Default::default(),
         }
     }
 }
@@ -145,31 +142,21 @@ impl EventHandler for StreamHandler {
         _value: Value,
         engine: FlutterEngine,
     ) -> Result<Value, MethodCallError> {
-        let stop_trigger = Arc::new(AtomicBool::new(false));
-        self.stop_trigger = stop_trigger.clone();
         let channel_name = self.channel.clone();
-
+        let width = self.player.width();
+        let height = self.player.height();
         engine.run_on_platform_thread(move |engine| {
             engine.with_channel(&channel_name, move |channel| {
                 if let Some(channel) = channel.try_as_method_channel() {
-                    let value = to_value(VideoEvent::initialized(100, 100, 5000)).unwrap();
-                    println!("{:?}", value);
+                    let value = to_value(VideoEvent::initialized(width, height, 1)).unwrap();
                     channel.send_success_event(&value);
                 }
             });
-
-            /*loop {
-                task::sleep(Duration::from_secs(1)).await;
-                if stop_trigger.load(Ordering::Relaxed) {
-                    break;
-                }
-            }*/
         });
         Ok(Value::Null)
     }
 
     fn on_cancel(&mut self, _engine: FlutterEngine) -> Result<Value, MethodCallError> {
-        self.stop_trigger.store(true, Ordering::Relaxed);
         Ok(Value::Null)
     }
 }
