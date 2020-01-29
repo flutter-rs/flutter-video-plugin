@@ -1,3 +1,4 @@
+#![allow(clippy::many_single_char_names)]
 use av_data::frame::{ArcFrame, FrameBufferConv, MediaKind};
 use av_data::params::VideoInfo;
 use av_data::rational::Rational64;
@@ -51,23 +52,25 @@ impl VideoPlayer {
             let mut now = Instant::now();
             loop {
                 if !playing2.load(Ordering::Relaxed) {
-                    //println!("not playing sleeping");
                     thread::sleep(Duration::from_millis(100));
                     continue;
                 }
 
                 if let Ok(frame) = rx.recv() {
-                    //println!("received video frame");
                     let pts = frame.t.pts.unwrap();
                     let timebase = frame.t.timebase.unwrap();
-                    //println!("{} {}", pts, timebase);
-                    let pts = (Rational64::from_integer(pts * 1000000000) * timebase).to_integer();
+                    let pts = Rational64::from_integer(pts * 1_000_000_000);
+                    let pts = (pts * timebase).to_integer();
                     if let Some(prev) = prev_pts {
                         let elapsed = now.elapsed();
                         if pts > prev {
                             let sleep_time = Duration::new(0, (pts - prev) as u32);
                             if elapsed < sleep_time {
-                                //println!("Sleep for {} - {:?}", pts - prev, sleep_time - elapsed);
+                                log::trace!(
+                                    "Sleep for {} - {:?}",
+                                    pts - prev,
+                                    sleep_time - elapsed
+                                );
                                 thread::sleep(sleep_time - elapsed);
                             }
                         }
@@ -79,20 +82,16 @@ impl VideoPlayer {
                         let y_plane: &[u8] = frame.buf.as_slice(0).unwrap();
                         let y_stride = frame.buf.linesize(0).unwrap() as usize;
                         let u_plane: &[u8] = frame.buf.as_slice(1).unwrap();
-                        let u_stride = frame.buf.linesize(1).unwrap() as usize;
+                        //let u_stride = frame.buf.linesize(1).unwrap() as usize;
                         let v_plane: &[u8] = frame.buf.as_slice(2).unwrap();
-                        let v_stride = frame.buf.linesize(2).unwrap() as usize;
-                        //println!("width: {} height: {}", width, height);
-                        //println!("y_plane len: {} stride: {}", y_plane.len(), y_stride);
-                        //println!("u_plane len: {} stride: {}", u_plane.len(), u_stride);
-                        //println!("v_plane len: {} stride: {}", v_plane.len(), v_stride);
+                        //let v_stride = frame.buf.linesize(2).unwrap() as usize;
 
                         let img = RgbaImage::from_fn(width as u32, height as u32, |x, y| {
                             let (cx, cy) = (x as usize, y as usize);
                             let y = y_plane[cy * y_stride + cx] as f64;
                             let u = u_plane[cy / 2 * width / 2 + cx / 2] as f64;
                             let v = v_plane[cy / 2 * width / 2 + cx / 2] as f64;
-                            let r = 1.164 * (y - 16.0) + 1.596* (v - 128.0);
+                            let r = 1.164 * (y - 16.0) + 1.596 * (v - 128.0);
                             let g = 1.164 * (y - 16.0) - 0.391 * (u - 128.0) - 0.813 * (v - 128.0);
                             let b = 1.164 * (y - 16.0) + 2.018 * (u - 128.0);
                             Rgba([clamp(r), clamp(g), clamp(b), 255])

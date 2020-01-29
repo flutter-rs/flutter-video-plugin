@@ -5,21 +5,19 @@ authors = ["David Craven <david@craven.ch>"]
 edition = "2018"
 
 [dependencies]
-env_logger = "0.7.1"
-flutter-engine = { path = "../flutter-rs/flutter-engine", features = ["image"] } # git = "https://github.com/dvc94ch/flutter-rs", branch = "texture-registry" }
-flutter-plugins = { path = "../flutter-rs/flutter-plugins" } #git = "https://github.com/dvc94ch/flutter-rs", branch = "texture-registry" }
-flutter-winit = { path = "../flutter-rs/flutter-winit" } #git = "https://github.com/dvc94ch/flutter-rs", branch = "texture-registry" }
-glutin = { git = "https://github.com/dvc94ch/glutin", branch = "android" }
-image = "0.22.4"
-log = "0.4.8"
-serde = { version = "1.0.104", features = ["derive"] }
-serde_json = "1.0.45"
-async-std = "1.4.0"
 av-data = "0.2.0"
 av-codec = "0.2.0"
 av-format = "0.2.0"
+av-vorbis = { git = "https://github.com/rust-av/av-vorbis" }
+cpal = { git = "https://github.com/rustaudio/cpal" }
+env_logger = "0.7.1"
+flutter-engine = { git = "https://github.com/flutter-rs/flutter-rs", features = ["gl-helpers"] }
+flutter-plugins = { git = "https://github.com/flutter-rs/flutter-rs" }
+flutter-winit = { git = "https://github.com/flutter-rs/flutter-rs" }
+glutin = { git = "https://github.com/dvc94ch/glutin", branch = "android" }
+image = "0.22.4"
 libvpx = { git = "https://github.com/rust-av/vpx-rs", features = ["codec-trait"] }
 libopus = { git = "https://github.com/rust-av/opus-rs", features = ["codec-trait"] }
+log = "0.4.8"
 matroska = { git = "https://github.com/rust-av/matroska" }
-cpal = { git = "https://github.com/rustaudio/cpal" }
-av-vorbis = { git = "https://github.com/rust-av/av-vorbis" }
+serde = { version = "1.0.104", features = ["derive"] }

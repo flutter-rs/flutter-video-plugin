@@ -76,9 +76,7 @@ impl MethodCallHandler for Handler {
                     registrar.register_channel(EventChannel::new(channel, stream_handler));
                 });
 
-                Ok(json_value!({
-                    "textureId": texture_id,
-                }))
+                Ok(to_value(TextureIdArgs { texture_id })?)
             }
             "init" => Ok(Value::Null),
             "setLooping" => {
@@ -129,10 +127,7 @@ struct StreamHandler {
 
 impl StreamHandler {
     fn new(channel: String, player: Player) -> Self {
-        Self {
-            channel,
-            player,
-        }
+        Self { channel, player }
     }
 }
 

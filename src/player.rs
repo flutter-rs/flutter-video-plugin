@@ -1,9 +1,5 @@
 use crate::audio::{AudioPlayer, AudioStream};
 use crate::video::{VideoPlayer, VideoStream};
-use av_format::demuxer::*;
-use flutter_engine::texture_registry::Texture;
-use flutter_plugins::prelude::*;
-// use matroska::demuxer::MKV_DESC;
 use av_codec::common::CodecList;
 use av_codec::decoder::Codecs as DecCodecs;
 use av_codec::decoder::Context as DecContext;
@@ -11,7 +7,10 @@ use av_data::frame::ArcFrame;
 pub use av_data::frame::MediaKind;
 use av_data::params;
 use av_format::buffer::AccReader;
+use av_format::demuxer::*;
 use av_vorbis::decoder::VORBIS_DESCR;
+use flutter_engine::texture_registry::Texture;
+use flutter_plugins::prelude::*;
 use libopus::decoder::OPUS_DESCR;
 use libvpx::decoder::VP9_DESCR;
 use matroska::demuxer::MkvDemuxer;
@@ -32,10 +31,10 @@ pub enum PlayerError {
 impl std::fmt::Display for PlayerError {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
-            Self::Format(err) => return err.fmt(f),
-            Self::Codec(err) => return err.fmt(f),
-            Self::Audio(err) => return err.fmt(f),
-            Self::Io(err) => return err.fmt(f),
+            Self::Format(err) => err.fmt(f),
+            Self::Codec(err) => err.fmt(f),
+            Self::Audio(err) => err.fmt(f),
+            Self::Io(err) => err.fmt(f),
         }
     }
 }
@@ -81,7 +80,6 @@ struct PlaybackContext {
 impl PlaybackContext {
     pub fn from_path(path: &Path) -> Result<Self, PlayerError> {
         let r = File::open(path)?;
-        // Context::from_read(demuxers, r).unwrap();
         let ar = AccReader::with_capacity(4 * 1024, r);
 
         let mut c = Context::new(Box::new(MkvDemuxer::new()), Box::new(ar));
@@ -127,7 +125,6 @@ impl PlaybackContext {
         match self.demuxer.read_event()? {
             Event::NewPacket(pkt) => {
                 if let Some(dec) = self.decoders.get_mut(&pkt.stream_index) {
-                    //println!("Decoding packet at index {}", pkt.stream_index);
                     dec.send_packet(&pkt)?;
                     Ok(dec.receive_frame().ok())
                 } else {
@@ -168,7 +165,6 @@ impl Player {
         // decoder task
         thread::spawn(move || loop {
             if let Ok(Some(frame)) = context.decode_one() {
-                //println!("decoded frame");
                 match frame.kind {
                     MediaKind::Video(_) => {
                         if let Err(err) = v_s.send(frame) {
