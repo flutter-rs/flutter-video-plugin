@@ -2,25 +2,38 @@
 use av_data::frame::{ArcFrame, FrameBufferConv, MediaKind};
 use av_data::params::VideoInfo;
 use av_data::rational::Rational64;
+use crossbeam::atomic::AtomicCell;
 use flutter_engine::texture_registry::Texture;
 use image::{Rgba, RgbaImage};
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::Receiver;
 use std::sync::Arc;
 use std::thread;
 use std::time::{Duration, Instant};
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum PlayerState {
+    Playing,
+    Paused,
+    Stopped,
+}
+
 pub struct VideoStream {
-    playing: Arc<AtomicBool>,
+    state: Arc<AtomicCell<PlayerState>>,
 }
 
 impl VideoStream {
     pub fn play(&self) {
-        self.playing.store(true, Ordering::Relaxed);
+        self.state.store(PlayerState::Playing);
     }
 
     pub fn pause(&self) {
-        self.playing.store(false, Ordering::Relaxed);
+        self.state.store(PlayerState::Paused);
+    }
+}
+
+impl Drop for VideoStream {
+    fn drop(&mut self) {
+        self.state.store(PlayerState::Stopped);
     }
 }
 
@@ -45,15 +58,19 @@ impl VideoPlayer {
         let width = self.width;
         let height = self.height;
         let texture = self.texture;
-        let playing = Arc::new(AtomicBool::new(false));
-        let playing2 = playing.clone();
+        let state = Arc::new(AtomicCell::new(PlayerState::Paused));
+        let state2 = state.clone();
         thread::spawn(move || {
             let mut prev_pts = None;
             let mut now = Instant::now();
             loop {
-                if !playing2.load(Ordering::Relaxed) {
-                    thread::sleep(Duration::from_millis(100));
-                    continue;
+                match state2.load() {
+                    PlayerState::Playing => {}
+                    PlayerState::Paused => {
+                        thread::sleep(Duration::from_millis(100));
+                        continue;
+                    }
+                    PlayerState::Stopped => break,
                 }
 
                 if let Ok(frame) = rx.recv() {
@@ -101,7 +118,7 @@ impl VideoPlayer {
                 }
             }
         });
-        VideoStream { playing }
+        VideoStream { state }
     }
 }
 

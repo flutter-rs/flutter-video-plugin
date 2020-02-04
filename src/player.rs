@@ -167,13 +167,13 @@ impl Player {
             if let Ok(Some(frame)) = context.decode_one() {
                 match frame.kind {
                     MediaKind::Video(_) => {
-                        if let Err(err) = v_s.send(frame) {
-                            eprintln!("{}", err);
+                        if v_s.send(frame).is_err() {
+                            break;
                         }
                     }
                     MediaKind::Audio(_) => {
-                        if let Err(err) = a_s.send(frame) {
-                            eprintln!("{}", err);
+                        if a_s.send(frame).is_err() {
+                            break;
                         }
                     }
                 }
