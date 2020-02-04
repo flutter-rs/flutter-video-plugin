@@ -52,6 +52,7 @@ impl MethodCallHandler for Handler {
         engine: FlutterEngine,
     ) -> Result<Value, MethodCallError> {
         match call.method.as_str() {
+            "init" => Ok(Value::Null),
             "create" => {
                 let args: CreateArgs = from_value(&call.args)?;
 
@@ -78,7 +79,6 @@ impl MethodCallHandler for Handler {
 
                 Ok(to_value(TextureIdArgs { texture_id })?)
             }
-            "init" => Ok(Value::Null),
             "setLooping" => {
                 let args: SetLoopingArgs = from_value(&call.args)?;
                 let stream = self.streams.get(&args.texture_id).ok_or(InvalidTextureId)?;
@@ -113,6 +113,13 @@ impl MethodCallHandler for Handler {
                 let args: SeekToArgs = from_value(&call.args)?;
                 let stream = self.streams.get(&args.texture_id).ok_or(InvalidTextureId)?;
                 stream.read().unwrap().player.seek_to(args.location);
+                Ok(Value::Null)
+            }
+            "dispose" => {
+                let args: TextureIdArgs = from_value(&call.args)?;
+                self.streams
+                    .remove(&args.texture_id)
+                    .ok_or(InvalidTextureId)?;
                 Ok(Value::Null)
             }
             _ => Err(MethodCallError::NotImplemented),
