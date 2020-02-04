@@ -2,27 +2,14 @@
 use av_data::frame::{ArcFrame, FrameBufferConv, MediaKind};
 use av_data::params::VideoInfo;
 use av_data::rational::Rational64;
+use core::sync::atomic::AtomicI8;
 use flutter_engine::texture_registry::Texture;
 use image::{Rgba, RgbaImage};
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::Ordering;
 use std::sync::mpsc::Receiver;
 use std::sync::Arc;
 use std::thread;
 use std::time::{Duration, Instant};
-
-pub struct VideoStream {
-    playing: Arc<AtomicBool>,
-}
-
-impl VideoStream {
-    pub fn play(&self) {
-        self.playing.store(true, Ordering::Relaxed);
-    }
-
-    pub fn pause(&self) {
-        self.playing.store(false, Ordering::Relaxed);
-    }
-}
 
 pub struct VideoPlayer {
     width: usize,
@@ -41,17 +28,19 @@ impl VideoPlayer {
         }
     }
 
-    pub fn create_stream(self, rx: Receiver<ArcFrame>) -> VideoStream {
+    pub fn create_stream(self, rx: Receiver<ArcFrame>, state: Arc<AtomicI8>) {
         let width = self.width;
         let height = self.height;
         let texture = self.texture;
-        let playing = Arc::new(AtomicBool::new(false));
-        let playing2 = playing.clone();
         thread::spawn(move || {
             let mut prev_pts = None;
             let mut now = Instant::now();
             loop {
-                if !playing2.load(Ordering::Relaxed) {
+                if state.load(Ordering::Relaxed) < -1 {
+                    break;
+                }
+
+                if state.load(Ordering::Relaxed) == 0 {
                     thread::sleep(Duration::from_millis(100));
                     continue;
                 }
@@ -101,7 +90,6 @@ impl VideoPlayer {
                 }
             }
         });
-        VideoStream { playing }
     }
 }
 

@@ -1,5 +1,5 @@
 use crate::audio::{AudioPlayer, AudioStream};
-use crate::video::{VideoPlayer, VideoStream};
+use crate::video::VideoPlayer;
 use av_codec::common::CodecList;
 use av_codec::decoder::Codecs as DecCodecs;
 use av_codec::decoder::Context as DecContext;
@@ -17,6 +17,7 @@ use matroska::demuxer::MkvDemuxer;
 use std::collections::HashMap;
 use std::fs::File;
 use std::path::Path;
+use std::sync::atomic::{AtomicI8, Ordering};
 use std::sync::mpsc;
 use std::thread;
 
@@ -143,9 +144,15 @@ impl PlaybackContext {
 
 pub struct Player {
     audio: Option<AudioStream>,
-    video: Option<VideoStream>,
     width: i64,
     height: i64,
+    state: Arc<AtomicI8>,
+}
+
+impl Drop for Player {
+    fn drop(&mut self) {
+        self.state.store(-1, Ordering::Relaxed);
+    }
 }
 
 impl Player {
@@ -154,26 +161,33 @@ impl Player {
         let (v_s, v_r) = mpsc::sync_channel(24);
         let (a_s, a_r) = mpsc::channel();
 
+        let state = Arc::new(AtomicI8::new(0));
+        let state_c1 = state.clone();
+        let state_c2 = state.clone();
         let audio_info = context.audio.take().expect("audio channel");
         let audio = AudioPlayer::new(&audio_info)?;
         let audio_stream = audio.create_stream(a_r)?;
 
         let video_info = context.video.take().expect("video channel");
         let video = VideoPlayer::new(&video_info, texture);
-        let video_stream = video.create_stream(v_r);
+        video.create_stream(v_r, state_c2);
 
         // decoder task
         thread::spawn(move || loop {
+            if state_c1.load(Ordering::Relaxed) < 0 {
+                state_c1.store(-2, Ordering::Relaxed);
+                break;
+            }
             if let Ok(Some(frame)) = context.decode_one() {
                 match frame.kind {
                     MediaKind::Video(_) => {
                         if let Err(err) = v_s.send(frame) {
-                            eprintln!("{}", err);
+                            eprintln!("Thread#{:?}:Video {}", thread::current().id(), err);
                         }
                     }
                     MediaKind::Audio(_) => {
                         if let Err(err) = a_s.send(frame) {
-                            eprintln!("{}", err);
+                            eprintln!("Thread#{:?}:Audio {}", thread::current().id(), err);
                         }
                     }
                 }
@@ -182,9 +196,9 @@ impl Player {
 
         Ok(Self {
             audio: Some(audio_stream),
-            video: Some(video_stream),
             width: video_info.width as _,
             height: video_info.height as _,
+            state,
         })
     }
 
@@ -200,9 +214,7 @@ impl Player {
         if let Some(audio) = &self.audio {
             audio.play()?;
         }
-        if let Some(video) = &self.video {
-            video.play();
-        }
+        self.state.store(1, Ordering::Relaxed);
         Ok(())
     }
 
@@ -210,9 +222,7 @@ impl Player {
         if let Some(audio) = &self.audio {
             audio.pause()?;
         }
-        if let Some(video) = &self.video {
-            video.pause();
-        }
+        self.state.store(0, Ordering::Relaxed);
         Ok(())
     }
 

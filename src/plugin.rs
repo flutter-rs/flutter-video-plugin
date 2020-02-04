@@ -115,6 +115,14 @@ impl MethodCallHandler for Handler {
                 stream.read().unwrap().player.seek_to(args.location);
                 Ok(Value::Null)
             }
+            "dispose" => {
+                let args: TextureIdArgs = from_value(&call.args)?;
+                let texture_id = &args.texture_id;
+                let channel = format!("{}/videoEvents{}", CHANNEL_NAME, texture_id);
+                self.streams.remove(texture_id).ok_or(InvalidTextureId)?;
+                engine.remove_channel(&channel);
+                Ok(Value::Null)
+            }
             _ => Err(MethodCallError::NotImplemented),
         }
     }
