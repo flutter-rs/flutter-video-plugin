@@ -661,7 +661,7 @@ version = "0.4.0"
 source = "git+https://github.com/flutter-rs/flutter-rs#b6c9ddd05bc6044087cebcd156c2b2911987b18b"
 dependencies = [
  "crossbeam-channel 0.4.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "flutter-engine-sys 0.4.0 (git+https://github.com/flutter-rs/flutter-rs)",
+ "flutter-engine-sys 0.4.0",
  "gl 0.14.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "image 0.22.4 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.4.8 (registry+https://github.com/rust-lang/crates.io-index)",
