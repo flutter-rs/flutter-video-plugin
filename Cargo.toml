@@ -16,7 +16,7 @@ flutter-engine = { git = "https://github.com/flutter-rs/flutter-rs", features = 
 flutter-plugins = { git = "https://github.com/flutter-rs/flutter-rs" }
 flutter-winit = { git = "https://github.com/flutter-rs/flutter-rs" }
 glutin = { git = "https://github.com/dvc94ch/glutin", branch = "android" }
-image = "0.22.4"
+image = "0.23.12"
 libvpx = { git = "https://github.com/rust-av/vpx-rs", features = ["codec-trait"] }
 libopus = { git = "https://github.com/rust-av/opus-rs", features = ["codec-trait"] }
 log = "0.4.8"
